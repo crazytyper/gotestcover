@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"runtime"
 	"sync"
+
+	"golang.org/x/tools/cover"
 )
 
 var (
@@ -48,17 +50,26 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
 	pkgs, err := getPackages()
 	if err != nil {
 		return err
 	}
+
 	cov, failed := runAllPackageTests(pkgs, func(out string) {
 		fmt.Print(out)
 	})
-	err = writeCoverProfile(cov)
+
+	// write the merged profile
+	file, err := os.Create(flagCoverProfile)
 	if err != nil {
 		return err
 	}
+	defer file.Close()
+	writeCoverProfile(cov, file)
+
+	writeSummaryReport(cov, os.Stdout)
+
 	if failed {
 		return fmt.Errorf("test failed")
 	}
@@ -108,11 +119,11 @@ func getPackages() ([]string, error) {
 	return pkgs, nil
 }
 
-func runAllPackageTests(pkgs []string, pf func(string)) ([]byte, bool) {
+func runAllPackageTests(pkgs []string, pf func(string)) ([]*cover.Profile, bool) {
 	pkgch := make(chan string)
 	type res struct {
 		out string
-		cov []byte
+		cov []*cover.Profile
 		err error
 	}
 	resch := make(chan res)
@@ -130,6 +141,12 @@ func runAllPackageTests(pkgs []string, pf func(string)) ([]byte, bool) {
 		go func() {
 			for p := range pkgch {
 				out, cov, err := runPackageTests(p)
+				if len(cov) == 0 {
+					// we assume the package contains no test.
+					// for the total coverage to be meaningful we still have to take
+					// the number of statements in this package into account.
+					cov, err = emptyProfile(p)
+				}
 				resch <- res{
 					out: out,
 					cov: cov,
@@ -140,11 +157,14 @@ func runAllPackageTests(pkgs []string, pf func(string)) ([]byte, bool) {
 		}()
 	}
 	failed := false
-	var cov []byte
+	cov := []*cover.Profile{}
 	for r := range resch {
 		if r.err == nil {
 			pf(r.out)
-			cov = append(cov, r.cov...)
+
+			for _, p := range r.cov {
+				cov = addProfile(cov, p)
+			}
 		} else {
 			pf(r.err.Error())
 			failed = true
@@ -153,7 +173,7 @@ func runAllPackageTests(pkgs []string, pf func(string)) ([]byte, bool) {
 	return cov, failed
 }
 
-func runPackageTests(pkg string) (out string, cov []byte, err error) {
+func runPackageTests(pkg string) (out string, cov []*cover.Profile, err error) {
 	coverFile, err := ioutil.TempFile("", "gotestcover-")
 	if err != nil {
 		return "", nil, err
@@ -208,14 +228,16 @@ func runPackageTests(pkg string) (out string, cov []byte, err error) {
 	if err != nil {
 		return "", nil, err
 	}
-	cov, err = ioutil.ReadAll(coverFile)
+
+	cov, err = cover.ParseProfiles(coverFile.Name())
 	if err != nil {
 		return "", nil, err
 	}
-	cov = removeFirstLine(cov)
+
 	return string(cmdOut), cov, nil
 }
 
+/* replaced with version that operates on []*cover.Profile instead of []byte
 func writeCoverProfile(cov []byte) error {
 	if len(cov) == 0 {
 		return nil
@@ -233,6 +255,7 @@ func writeCoverProfile(cov []byte) error {
 	buf.Write(cov)
 	return ioutil.WriteFile(flagCoverProfile, buf.Bytes(), os.FileMode(0644))
 }
+*/
 
 func runGoCommand(args ...string) ([]byte, error) {
 	cmd := exec.Command("go", args...)

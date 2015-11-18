@@ -1,10 +1,13 @@
 # Go test cover with multiple packages support
 
+A fork of https://github.com/pierrre/gotestcover that integrates https://github.com/wadey/gocovmerge.
+
 ## Features
 - Coverage profile with multiple packages (`go test` doesn't support that)
+- Merges coverage profiles
 
 ## Install
-`go get github.com/pierrre/gotestcover`
+`go get github.com/crazytyper/gotestcover`
 
 ## Usage
 ```sh
