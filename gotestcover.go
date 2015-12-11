@@ -145,7 +145,11 @@ func runAllPackageTests(pkgs []string, pf func(string)) ([]*cover.Profile, bool)
 					// we assume the package contains no test.
 					// for the total coverage to be meaningful we still have to take
 					// the number of statements in this package into account.
-					cov, err = emptyProfile(p)
+					var profileErr error
+					cov, profileErr = emptyProfile(p)
+					if err == nil && profileErr != nil {
+						err = profileErr
+					}
 				}
 				resch <- res{
 					out: out,
