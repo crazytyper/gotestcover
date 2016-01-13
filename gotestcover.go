@@ -35,6 +35,9 @@ var (
 
 	// custom
 	flagParallelPackages = runtime.GOMAXPROCS(0)
+
+	// reports
+	flagReportJSON bool
 )
 
 func main() {
@@ -65,9 +68,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 	writeCoverProfile(cov, file)
+	file.Close()
 
+	cov, ignored := ignore(cov)
+
+	if len(ignored) > 0 {
+		writeIgnoredReport(ignored, os.Stdout)
+	}
+	writeHotspotsReport(cov, os.Stdout)
 	writeSummaryReport(cov, os.Stdout)
 
 	if failed {
@@ -96,7 +105,7 @@ func parseFlags() error {
 
 	flag.Parse()
 	if flagCoverProfile == "" {
-		return fmt.Errorf("flag coverprofile must be set")
+		flagCoverProfile = "out.coverprofile"
 	}
 	if flagParallelPackages < 1 {
 		return fmt.Errorf("flag parallelpackages must be greater than or equal to 1")
@@ -163,12 +172,11 @@ func runAllPackageTests(pkgs []string, pf func(string)) ([]*cover.Profile, bool)
 	failed := false
 	cov := []*cover.Profile{}
 	for r := range resch {
+		for _, p := range r.cov {
+			cov = addProfile(cov, p)
+		}
 		if r.err == nil {
 			pf(r.out)
-
-			for _, p := range r.cov {
-				cov = addProfile(cov, p)
-			}
 		} else {
 			pf(r.err.Error())
 			failed = true
@@ -240,26 +248,6 @@ func runPackageTests(pkg string) (out string, cov []*cover.Profile, err error) {
 
 	return string(cmdOut), cov, nil
 }
-
-/* replaced with version that operates on []*cover.Profile instead of []byte
-func writeCoverProfile(cov []byte) error {
-	if len(cov) == 0 {
-		return nil
-	}
-	buf := new(bytes.Buffer)
-	mode := flagCoverMode
-	if mode == "" {
-		if flagRace {
-			mode = "atomic"
-		} else {
-			mode = "set"
-		}
-	}
-	fmt.Fprintf(buf, "mode: %s\n", mode)
-	buf.Write(cov)
-	return ioutil.WriteFile(flagCoverProfile, buf.Bytes(), os.FileMode(0644))
-}
-*/
 
 func runGoCommand(args ...string) ([]byte, error) {
 	cmd := exec.Command("go", args...)

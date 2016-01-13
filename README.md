@@ -5,6 +5,8 @@ A fork of https://github.com/pierrre/gotestcover that integrates https://github.
 ## Features
 - Coverage profile with multiple packages (`go test` doesn't support that)
 - Merges coverage profiles
+- Show total coverages and statements
+- Show a hot spot report of the 10 packages containing the most uncovered statements
 
 ## Install
 `go get github.com/crazytyper/gotestcover`
