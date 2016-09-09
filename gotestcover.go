@@ -113,9 +113,29 @@ func parseFlags() error {
 	return nil
 }
 
+func argsBefore(this string) []string {
+	args := flag.Args()
+	for i, arg := range args {
+		if arg == this {
+			return args[:i]
+		}
+	}
+	return args
+}
+
+func argsAfter(this string) []string {
+	args := flag.Args()
+	for i, arg := range args {
+		if arg == this {
+			return args[i+1:]
+		}
+	}
+	return args
+}
+
 func getPackages() ([]string, error) {
 	cmdArgs := []string{"list"}
-	cmdArgs = append(cmdArgs, flag.Args()...)
+	cmdArgs = append(cmdArgs, argsBefore("--")...)
 	cmdOut, err := runGoCommand(cmdArgs...)
 	if err != nil {
 		return nil, err
@@ -236,6 +256,9 @@ func runPackageTests(pkg string) (out string, cov []*cover.Profile, err error) {
 	args = append(args, "-coverprofile", coverFile.Name())
 
 	args = append(args, pkg)
+
+	args = append(args, argsAfter("--")...)
+
 	cmdOut, err := runGoCommand(args...)
 	if err != nil {
 		return "", nil, err
