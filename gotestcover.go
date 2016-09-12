@@ -130,7 +130,7 @@ func argsAfter(this string) []string {
 			return args[i+1:]
 		}
 	}
-	return args
+	return []string{}
 }
 
 func getPackages() ([]string, error) {
